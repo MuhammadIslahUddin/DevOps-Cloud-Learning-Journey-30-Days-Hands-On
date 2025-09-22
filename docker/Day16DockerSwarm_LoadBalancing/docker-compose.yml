@@ -1,0 +1,16 @@
+version: "3.8"
+
+services:
+  web:
+    image: myapp:v1      # default local image tag (replace with yourhub/myapp:v1 if pushing)
+    ports:
+      - "8080:5000"
+    deploy:
+      replicas: 3
+      update_config:
+        parallelism: 1     # update 1 at a time
+        delay: 5s          # wait 5 seconds between updates
+        order: start-first
+        failure_action: rollback
+      restart_policy:
+        condition: on-failure
