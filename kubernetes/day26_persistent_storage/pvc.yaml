@@ -1,0 +1,16 @@
+
+---
+
+# File: `pvc.yaml`
+```yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: demo-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+# If you want to bind to a manual hostPath PV, add "volumeName: pv-day26-demo"
