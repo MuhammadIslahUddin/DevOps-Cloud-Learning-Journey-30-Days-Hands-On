@@ -1,0 +1,47 @@
+pipeline {
+  agent any
+
+  environment {
+    IMAGE = "sample-app:${env.BUILD_NUMBER}"
+  }
+
+  stages {
+    stage('Checkout') {
+      steps {
+        checkout scm
+      }
+    }
+
+    stage('Build') {
+      steps {
+        sh 'docker build -t $IMAGE .'
+      }
+    }
+
+    stage('Test') {
+      steps {
+        // run pytest inside the image (image includes pytest via requirements.txt)
+        sh 'docker run --rm $IMAGE pytest || (echo "Tests failed"; exit 1)'
+      }
+    }
+
+    stage('Deploy') {
+      steps {
+        // stop & remove previous container if exists, then run new one
+        sh 'docker rm -f sample-app || true'
+        sh 'docker run -d --name sample-app -p 5000:5000 $IMAGE'
+      }
+    }
+  }
+
+  post {
+    always {
+      sh 'docker image ls --format "{{.Repository}}:{{.Tag}} {{.ID}}"'
+    }
+    failure {
+      echo 'Pipeline failed — check logs'
+    }
+  }
+}
+JENK
+
