@@ -1,0 +1,51 @@
+---
+- name: Bootstrap web host (install Docker)
+  hosts: web
+  become: true
+  vars:
+    docker_packages:
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - gnupg-agent
+      - software-properties-common
+  tasks:
+    - name: Ensure apt cache is up-to-date
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Install prerequisite packages
+      apt:
+        name: "{{ docker_packages }}"
+        state: present
+
+    - name: Add Docker GPG key
+      ansible.builtin.apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+
+    - name: Add Docker apt repository
+      ansible.builtin.apt_repository:
+        repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu focal stable
+        state: present
+      # adjust 'focal' to your distro codename if required
+
+    - name: Install Docker engine
+      apt:
+        name: docker-ce
+        state: latest
+        update_cache: yes
+
+    - name: Ensure Docker service is started and enabled
+      service:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Add ansible user to docker group (optional)
+      user:
+        name: "{{ ansible_user }}"
+        groups: docker
+        append: yes
+      when: ansible_user is defined

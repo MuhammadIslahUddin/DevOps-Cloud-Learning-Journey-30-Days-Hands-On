@@ -1,0 +1,38 @@
+---
+- name: Deploy Flask container (using community.docker)
+  hosts: web
+  become: true
+  collections:
+    - community.docker
+
+  vars:
+    image_name: islahuddin26/flask-app:latest
+    container_name: flaskapp
+    published_ports:
+      - "8080:8080"
+
+  tasks:
+    - name: Ensure docker image is present (pull)
+      community.docker.docker_image:
+        name: "{{ image_name }}"
+        source: pull
+
+    - name: Run Flask container
+      community.docker.docker_container:
+        name: "{{ container_name }}"
+        image: "{{ image_name }}"
+        state: started
+        restart_policy: always
+        published_ports: "{{ published_ports }}"
+        env: {}
+        detach: true
+
+    - name: Wait for app to become ready (HTTP 200)
+      uri:
+        url: "http://localhost:8080/"
+        status_code: 200
+        timeout: 5
+      register: web_check
+      retries: 5
+      delay: 3
+      until: web_check.status == 200
