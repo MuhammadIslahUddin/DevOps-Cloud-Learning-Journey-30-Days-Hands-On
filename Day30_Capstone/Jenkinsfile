@@ -1,0 +1,53 @@
+pipeline {
+  agent any
+
+  environment {
+    IMAGE = "islahuddin26/flask-app"
+  }
+
+  stages {
+    stage('Checkout') {
+      steps {
+        checkout scm
+      }
+    }
+
+    stage('Build docker image') {
+      steps {
+        sh 'cd app'
+        sh "docker build -t ${IMAGE}:${BUILD_NUMBER} ."
+        sh "docker tag ${IMAGE}:${BUILD_NUMBER} ${IMAGE}:latest"
+      }
+    }
+
+    stage('Login & Push to Docker Hub') {
+      steps {
+        // dockerhub-creds must be added in Jenkins Credentials (username/password)
+        withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+          sh 'echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin'
+          sh "docker push ${IMAGE}:${BUILD_NUMBER}"
+          sh "docker push ${IMAGE}:latest"
+        }
+      }
+    }
+
+    stage('Trigger Ansible deploy') {
+      steps {
+        // supply ansible key as Jenkins credential 'ansible-ssh' of type SSH Username with private key
+        withCredentials([sshUserPrivateKey(credentialsId: 'ansible-ssh', keyFileVariable: 'ANSIBLE_KEY')]) {
+          // write inventory file so ansible can use it from workspace
+          sh 'mkdir -p ansible'
+          sh 'cat > ansible/inventory.ini <<EOF\n[k8s]\n54.87.55.218 ansible_user=ec2-user ansible_ssh_private_key_file=$ANSIBLE_KEY ansible_python_interpreter=/usr/bin/python3\nEOF'
+          // run the ansible playbook (requires ansible installed on Jenkins agent)
+          sh "ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i ansible/inventory.ini ansible/playbooks/03-deploy-k8s.yml -e image=${IMAGE}:${BUILD_NUMBER}"
+        }
+      }
+    }
+  }
+
+  post {
+    always {
+      sh 'docker images | head -n 20 || true'
+    }
+  }
+}

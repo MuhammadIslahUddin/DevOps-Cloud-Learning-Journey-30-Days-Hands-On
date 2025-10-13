@@ -1,0 +1,43 @@
+---
+- name: Deploy capstone app to Kubernetes (apply manifests & ensure rollout)
+  hosts: k8s
+  become: no
+  vars:
+    k8s_remote_dir: /tmp/capstone-k8s
+    image: "islahuddin26/flask-app:latest"   # override with extra_var if needed
+  tasks:
+    - name: Ensure remote dir exists
+      file:
+        path: "{{ k8s_remote_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Copy k8s manifests to remote control node
+      copy:
+        src: "{{ item }}"
+        dest: "{{ k8s_remote_dir }}/"
+      with_fileglob:
+        - "../../k8s/*.yaml"
+      delegate_to: localhost
+
+    - name: Push manifests from local to remote (rsync alternative)
+      synchronize:
+        src: "{{ lookup('pipe', 'pwd') }}/k8s/"
+        dest: "{{ k8s_remote_dir }}/"
+        mode: push
+
+    - name: Apply the manifests (apply all files in dir)
+      command: kubectl apply -f "{{ k8s_remote_dir }}/"
+      register: kubectl_apply
+      failed_when: kubectl_apply.rc not in [0]
+
+    - name: Set image (ensure deployment uses latest image)
+      command: >
+        kubectl set image deployment/capstone-flask flask={{ image }} --record
+      register: set_image
+      failed_when: set_image.rc not in [0,1]   # set image returns 1 if already set
+
+    - name: Wait for rollout to finish
+      command: kubectl rollout status deployment/capstone-flask --timeout=120s
+      register: rollout
+      failed_when: rollout.rc != 0
